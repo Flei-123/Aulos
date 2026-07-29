@@ -1,0 +1,34 @@
+{
+  // Smallest useful bank: one bus tree, one spatial event with a parameter.
+  // Used by examples/hello_aulos.c. Comments and trailing commas are allowed.
+  "buses": [
+    { "name": "master", "volume": 1.0 },
+    { "name": "sfx",    "parent": "master", "volume": 0.9 },
+  ],
+
+  "events": [
+    {
+      "name": "vehicle_engine",
+      "bus": "sfx",
+      "sample": "engine_loop.wav",
+      "loop": true,
+      "volume": 1.0,
+      "spatial": true,
+      "min_distance": 4.0,
+      "max_distance": 120.0,
+      "rolloff": "inverse",
+      "doppler": 1.0,
+      "priority": 200,
+      "parameters": [
+        { "name": "rpm", "target": "pitch", "default": 1200,
+          "curve": [[1200, 0.8], [3000, 1.6], [6000, 2.8]] }
+      ]
+    },
+    {
+      "name": "beep",
+      "bus": "sfx",
+      "sample": "beep.wav",
+      "volume": 0.8
+    }
+  ]
+}

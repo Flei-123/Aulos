@@ -1,0 +1,125 @@
+{
+  // Bank used by the Aulos test suite. Comments and trailing commas are allowed.
+  "buses": [
+    { "name": "master", "volume": 1.0 },
+    { "name": "sfx",    "parent": "master", "volume": 1.0 },
+    { "name": "music",  "parent": "master", "volume": 1.0 },
+  ],
+
+  "events": [
+    {
+      // constant 0.5 level, no randomisation: the reference for gain tests
+      "name": "dc",
+      "bus": "sfx",
+      "sample": "dc_half.wav",
+      "volume": 1.0,
+      "loop": true
+    },
+    {
+      "name": "dc_half_volume",
+      "bus": "sfx",
+      "sample": "dc_half.wav",
+      "volume": 0.5,
+      "loop": true
+    },
+    {
+      "name": "dc_on_music",
+      "bus": "music",
+      "sample": "dc_half.wav",
+      "volume": 1.0,
+      "loop": true
+    },
+    {
+      "name": "sine",
+      "bus": "sfx",
+      "sample": "sine440.wav",
+      "volume": 1.0,
+      "loop": true
+    },
+    {
+      // spatial reference: inverse rolloff, min 1 m, max 100 m
+      "name": "dc_3d",
+      "bus": "sfx",
+      "sample": "dc_half.wav",
+      "volume": 1.0,
+      "loop": true,
+      "spatial": true,
+      "min_distance": 1.0,
+      "max_distance": 100.0,
+      "rolloff": "inverse"
+    },
+    {
+      "name": "dc_3d_linear",
+      "bus": "sfx",
+      "sample": "dc_half.wav",
+      "volume": 1.0,
+      "loop": true,
+      "spatial": true,
+      "min_distance": 1.0,
+      "max_distance": 11.0,
+      "rolloff": "linear"
+    },
+    {
+      // rpm drives pitch, load drives volume - the classic engine setup
+      "name": "engine",
+      "bus": "sfx",
+      "sample": "sine440.wav",
+      "volume": 1.0,
+      "loop": true,
+      "parameters": [
+        { "name": "rpm",  "target": "pitch",  "default": 1000,
+          "curve": [[1000, 1.0], [2000, 2.0]] },
+        { "name": "load", "target": "volume", "default": 0.0,
+          "curve": [[0.0, 0.5], [1.0, 1.0]] }
+      ]
+    },
+    {
+      "name": "occluded",
+      "bus": "sfx",
+      "sample": "sine440.wav",
+      "volume": 1.0,
+      "loop": true,
+      "parameters": [
+        { "name": "occlusion", "target": "lowpass", "default": 0.0,
+          "curve": [[0.0, 20000.0], [1.0, 200.0]] }
+      ]
+    },
+    {
+      // three variations, picked at random on every play
+      "name": "variation",
+      "bus": "sfx",
+      "samples": ["var_a.wav", "var_b.wav", "var_c.wav"],
+      "volume": 1.0,
+      "loop": true
+    },
+    {
+      "name": "blip",
+      "bus": "sfx",
+      "sample": "blip.wav",
+      "volume": 1.0,
+      "priority": 100
+    },
+    {
+      "name": "blip_important",
+      "bus": "sfx",
+      "sample": "blip.wav",
+      "volume": 1.0,
+      "priority": 250
+    },
+    {
+      "name": "limited",
+      "bus": "sfx",
+      "sample": "dc_half.wav",
+      "volume": 1.0,
+      "loop": true,
+      "max_instances": 3
+    },
+    {
+      "name": "stereo",
+      "bus": "sfx",
+      "sample": "stereo.wav",
+      "volume": 1.0,
+      "loop": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# build output
+build/
+build_cmake/
+out/
+cmake-build-*/
+unity_drop/
+
+# object / binary artefacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exp
+*.pdb
+*.ilk
+*.exe
+*.zip
+
+# rendered audio from the demo / examples (assets/*.wav ARE tracked)
+hello.wav
+stem_*.wav
+aulos_demo.wav
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.bak
+*.bak_*
+__pycache__/

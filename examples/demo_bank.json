@@ -1,0 +1,92 @@
+{
+  // Demo bank for tools/aulos_demo.cpp.
+  // Everything a game wants to change about sound lives here, not in C++.
+  "buses": [
+    { "name": "master",   "volume": 1.0 },
+    { "name": "sfx",      "parent": "master", "volume": 1.0 },
+    { "name": "ambience", "parent": "master", "volume": 0.45 },
+    { "name": "music",    "parent": "master", "volume": 0.75 }
+  ],
+
+  "events": [
+    {
+      // The classic engine: rpm drives pitch, load drives volume, muffle
+      // drives the low pass. Doppler is on, the drive-by is the point.
+      "name": "vehicle_engine",
+      "bus": "sfx",
+      "sample": "engine_loop.wav",
+      "volume": 1.0,
+      "loop": true,
+      "spatial": true,
+      "min_distance": 6.0,
+      "max_distance": 150.0,
+      "rolloff": "inverse",
+      "doppler": 1.0,
+      "priority": 200,
+      "parameters": [
+        { "name": "rpm",  "target": "pitch",  "default": 1200,
+          "curve": [[1200, 0.80], [2600, 1.45], [4400, 2.30], [6400, 3.20]] },
+        { "name": "load", "target": "volume", "default": 0.4,
+          "curve": [[0.0, 0.55], [1.0, 1.0]] },
+        { "name": "muffle", "target": "lowpass", "default": 0.0,
+          "curve": [[0.0, 20000.0], [1.0, 300.0]] }
+      ]
+    },
+    {
+      "name": "wind",
+      "bus": "ambience",
+      "sample": "wind_loop.wav",
+      "volume": 0.6,
+      "loop": true,
+      "parameters": [
+        { "name": "speed", "target": "volume", "default": 0.3,
+          "curve": [[0.0, 0.35], [1.0, 1.0]] }
+      ]
+    },
+    {
+      "name": "radio",
+      "bus": "music",
+      "sample": "radio_loop.wav",
+      "volume": 0.8,
+      "loop": true,
+      "parameters": [
+        { "name": "muffle", "target": "lowpass", "default": 0.0,
+          "curve": [[0.0, 20000.0], [1.0, 700.0]] }
+      ]
+    },
+    {
+      // Three variations plus pitch and volume jitter: no machine gun effect.
+      "name": "footstep",
+      "bus": "sfx",
+      "samples": ["step_a.wav", "step_b.wav", "step_c.wav"],
+      "volume": 0.9,
+      "pitch_random": 0.12,
+      "volume_random": 0.15,
+      "spatial": true,
+      "min_distance": 1.5,
+      "max_distance": 30.0,
+      "rolloff": "inverse",
+      "priority": 80
+    },
+    {
+      "name": "ui_beep",
+      "bus": "sfx",
+      "sample": "beep.wav",
+      "volume": 0.5,
+      "priority": 250
+    },
+    {
+      // Low priority on purpose: this is the event that gets stolen first.
+      "name": "drone_beep",
+      "bus": "sfx",
+      "sample": "beep.wav",
+      "volume": 0.55,
+      "spatial": true,
+      "min_distance": 3.0,
+      "max_distance": 60.0,
+      "rolloff": "inverse",
+      "priority": 40,
+      "pitch_random": 0.3
+    }
+  ]
+}

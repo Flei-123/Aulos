@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  name: linux-gcc }
+          - { os: windows-latest, name: windows-msvc }
+          - { os: macos-latest,   name: macos-clang }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DAULOS_SHARED=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Signal analysis (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          for s in car doppler rpm steps amb swarm full; do
+            ./build/aulos_demo examples/demo_bank.json assets build/stem_$s.wav $s
+          done
+          python3 tools/analyse_demo.py build
