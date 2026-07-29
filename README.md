@@ -134,6 +134,26 @@ callbacks into the host, no ownership tricks, handles are `uint32_t`.
 three files plus `aulos.dll` into your project. It is one supported host, not
 the point of the library.
 
+**The browser** - `bindings/web/` builds the same sources with emscripten and
+runs the mixer inside an `AudioWorkletProcessor`, so Phaser, three.js, PlayCanvas
+or a plain canvas game get the identical runtime:
+
+```js
+import { Aulos } from "aulos-audio";
+const aulos = await Aulos.create(new AudioContext({ sampleRate: 48000 }),
+                                 { bank: "banks/game.json", assets: ["engine_loop.wav"] });
+aulos.node.connect(aulos.node.context.destination);
+const car = aulos.play3d("vehicle_engine", -30, 0, -4);
+```
+
+No `SharedArrayBuffer`, no pthreads, therefore no COOP/COEP headers and no
+cross-origin isolation - it works in a sandboxed iframe on a static host. The
+wasm binary is inlined in the module because an `AudioWorkletGlobalScope` has no
+`fetch()` to load a side file with. CI diffs the wasm render against the native
+one sample by sample: with resampling off the two are **bit identical**
+(384000/384000 samples), with a pitch sweep they stay within one quantisation
+step before sub-sample libm drift sets in. See `bindings/web/README.md`.
+
 ## The bank
 
 ```jsonc
@@ -250,13 +270,18 @@ tools/gen_*_assets.py  regenerates every WAV in assets/ deterministically
 examples/hello_aulos.c smallest possible integration, no engine involved
 examples/*.json        the banks used by the tests, the demo and the example
 bindings/unity/        C# bindings and two MonoBehaviours - one host, not the API
-.github/workflows/     CI: builds and tests on Linux, Windows and macOS
+bindings/web/          emscripten build, AudioWorklet runtime, npm package
+tools/browser_selftest.mjs  runs the wasm build in a real headless Chromium
+tools/compare_renders.py    diffs two renders segment by segment
+.github/workflows/     CI: Linux, Windows, macOS, plus a wasm/browser job
 ```
 
 ## Not there yet
 
 Streaming from disk (everything is decoded into RAM), reverb and sends, HRTF,
-a real authoring tool, and an Unreal/Godot binding. The voice pool is a hard
+a real authoring tool, and an Unreal/Godot binding. On the web the bank and its
+samples are staged into the wasm heap up front, so a large bank costs memory
+before it costs anything else. The voice pool is a hard
 ceiling by design - if you need 500 voices, raise `max_voices` and pay for it.
 
 ## License

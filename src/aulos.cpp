@@ -33,6 +33,13 @@
 #include <new>
 #include <algorithm>
 
+#if defined(AULOS_NO_DEVICE)
+/* The host renders us itself (WebAudio, an offline bounce, a unit test), so
+ * miniaudio's device layer is dead weight. Decoding and resampling stay in. */
+#  ifndef MA_NO_DEVICE_IO
+#    define MA_NO_DEVICE_IO
+#  endif
+#endif
 #include "miniaudio.h"
 
 namespace {
@@ -288,7 +295,9 @@ struct aul_system {
     std::atomic<float>    statPeakR{0};
 
     /* device */
+#if !defined(AULOS_NO_DEVICE)
     ma_device device{};
+#endif
     bool      deviceOpen = false;
 
     /* audio thread scratch */
@@ -730,11 +739,13 @@ extern "C" void aul_render(aul_system *sys, float *out, uint32_t frameCount) {
     }
 }
 
+#if !defined(AULOS_NO_DEVICE)
 static void aulDeviceCallback(ma_device *device, void *output, const void *input, ma_uint32 frameCount) {
     (void)input;
     aul_system *sys = (aul_system *)device->pUserData;
     aul_render(sys, (float *)output, (uint32_t)frameCount);
 }
+#endif
 
 /* ------------------------------------------------------------- public API - */
 
@@ -765,6 +776,13 @@ extern "C" aul_result aul_create(const aul_config *config, aul_system **outSyste
     findOrCreateBus(sys, "master");
     rebuildBusOrder(sys);
 
+#if defined(AULOS_NO_DEVICE)
+    if (config && config->enable_device) {
+        /* Built without a device layer: the host must pump aul_render(). */
+        delete sys;
+        return AUL_ERR_DEVICE;
+    }
+#else
     if (config && config->enable_device) {
         ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
         deviceConfig.playback.format   = ma_format_f32;
@@ -786,6 +804,7 @@ extern "C" aul_result aul_create(const aul_config *config, aul_system **outSyste
         sys->deviceOpen = true;
         sys->sampleRate = sys->device.sampleRate;
     }
+#endif
 
     *outSystem = sys;
     return AUL_OK;
@@ -793,11 +812,13 @@ extern "C" aul_result aul_create(const aul_config *config, aul_system **outSyste
 
 extern "C" void aul_destroy(aul_system *sys) {
     if (!sys) return;
+#if !defined(AULOS_NO_DEVICE)
     if (sys->deviceOpen) {
         ma_device_stop(&sys->device);
         ma_device_uninit(&sys->device);
         sys->deviceOpen = false;
     }
+#endif
     delete sys;
 }
 
@@ -970,12 +991,17 @@ extern "C" aul_result aul_load_bank(aul_system *sys, const char *path) {
     /* Loading rewrites the event and sample tables the audio thread reads.
      * Stopping the device is the cheapest way to make that safe. */
     bool restart = false;
+#if !defined(AULOS_NO_DEVICE)
     if (sys->deviceOpen) {
         ma_device_stop(&sys->device);
         restart = true;
     }
+#endif
     aul_result result = aulLoadBankImpl(sys, path);
+#if !defined(AULOS_NO_DEVICE)
     if (restart) ma_device_start(&sys->device);
+#endif
+    (void)restart;
     return result;
 }
 

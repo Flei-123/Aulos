@@ -1,0 +1,28 @@
+{
+  // Verification bank. Identical to examples/hello_bank.json except that
+  // nothing resamples: the rpm curve is flat at 1.0, doppler is off and the
+  // event is not spatial. hello_aulos makes the exact same calls with it, so
+  // any difference between two builds is then a real difference in the mixer,
+  // not accumulated resampler phase drift between two libm implementations.
+  "buses": [
+    { "name": "master", "volume": 1.0 },
+    { "name": "sfx",    "parent": "master", "volume": 0.9 }
+  ],
+
+  "events": [
+    {
+      "name": "vehicle_engine",
+      "bus": "sfx",
+      "sample": "engine_loop.wav",
+      "loop": true,
+      "volume": 1.0,
+      "spatial": false,
+      "doppler": 0.0,
+      "priority": 200,
+      "parameters": [
+        { "name": "rpm", "target": "pitch", "default": 1200,
+          "curve": [[1200, 1.0], [6000, 1.0]] }
+      ]
+    }
+  ]
+}

@@ -47,3 +47,63 @@ jobs:
             ./build/aulos_demo examples/demo_bank.json assets build/stem_$s.wav $s
           done
           python tools/analyse_demo.py build
+
+  wasm:
+    name: wasm-emscripten
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 'latest'
+          actions-cache-folder: 'emsdk-cache'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: numpy
+        run: python -m pip install --upgrade pip numpy
+
+      # The native build is the reference the wasm build is diffed against.
+      - name: Native reference render
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+          ./build/hello_aulos tools/flat_bank.json assets build/flat.wav
+
+      - name: Build wasm
+        run: bindings/web/build_wasm.sh
+
+      # No resampling: must be bit identical to the native render.
+      - name: Verify wasm == native (flat bank)
+        run: node bindings/web/test_node.mjs tools/flat_bank.json build/flat.wav
+
+      # Pitch sweep + doppler: identical to within a quantisation step early on,
+      # then sub-sample resampler phase drift from a different libm.
+      - name: Verify wasm == native (pitch sweep)
+        run: |
+          node bindings/web/test_node.mjs
+          python tools/compare_renders.py build/hello.wav build/hello_wasm.wav
+
+      - name: Headless browser check (AudioWorklet, no cross-origin isolation)
+        run: |
+          npm install --no-save playwright@1.61.1
+          npx playwright install --with-deps chromium
+          python3 tools/serve_web_demo.py 8099 &
+          sleep 2
+          node tools/browser_selftest.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aulos-wasm
+          path: |
+            bindings/web/aulos-wasm.mjs
+            bindings/web/aulos.js
+            bindings/web/aulos-worklet.js

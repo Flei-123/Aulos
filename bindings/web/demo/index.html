@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aulos in the browser</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         background: #101215; color: #d8dee4; margin: 0; padding: 32px; }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: .04em; }
+  p.sub { color: #7d8896; margin: 0 0 24px; }
+  fieldset { border: 1px solid #262b31; border-radius: 6px; margin: 0 0 16px; padding: 14px 16px; }
+  legend { color: #8ab4f8; padding: 0 6px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  button { font: inherit; background: #1b2027; color: #d8dee4; border: 1px solid #333a42;
+           border-radius: 4px; padding: 6px 12px; cursor: pointer; margin: 0 6px 6px 0; }
+  button:hover:not(:disabled) { background: #232a33; border-color: #4a5560; }
+  button:disabled { opacity: .4; cursor: default; }
+  input[type=range] { width: 260px; vertical-align: middle; }
+  label { display: inline-block; min-width: 120px; color: #97a2b0; }
+  pre { background: #0a0c0e; border: 1px solid #1e2329; border-radius: 4px;
+        padding: 12px; overflow: auto; margin: 0; white-space: pre-wrap; }
+  .meter { display: inline-block; width: 200px; height: 8px; background: #1b2027;
+           border-radius: 2px; overflow: hidden; vertical-align: middle; }
+  .meter > i { display: block; height: 100%; background: #58d68d; width: 0; }
+  .ok { color: #58d68d; } .bad { color: #e57373; }
+</style>
+</head>
+<body>
+<h1>Aulos &mdash; WebAssembly / AudioWorklet</h1>
+<p class="sub">The same C++ runtime that ships to Unity and Unreal, rendering in the audio thread.
+   No SharedArrayBuffer, no COOP/COEP, no cross-origin isolation.</p>
+
+<fieldset>
+  <legend>Live</legend>
+  <button id="start">Start audio</button>
+  <button id="engine" disabled>Start engine (3D)</button>
+  <button id="beep" disabled>Beep</button>
+  <button id="stopall" disabled>Stop all</button>
+  <div style="margin-top:10px">
+    <label for="rpm">rpm</label><input id="rpm" type="range" min="1200" max="6000" value="1200" disabled>
+    <span id="rpmv">1200</span>
+  </div>
+  <div>
+    <label for="posx">source x</label><input id="posx" type="range" min="-40" max="40" value="-30" step="0.5" disabled>
+    <span id="posxv">-30 m</span>
+  </div>
+  <div style="margin-top:10px">
+    <label>peak L/R</label><span class="meter"><i id="pl"></i></span> <span class="meter"><i id="pr"></i></span>
+  </div>
+  <div><label>voices</label><span id="voices">-</span></div>
+</fieldset>
+
+<fieldset>
+  <legend>Self test (OfflineAudioContext)</legend>
+  <button id="selftest">Render 4 s offline and report</button>
+  <pre id="log">idle</pre>
+</fieldset>
+
+<script type="module">
+import { Aulos } from "../aulos.js";
+
+const ASSETS = ["engine_loop.wav", "beep.wav"];
+const log = document.getElementById("log");
+const $ = (id) => document.getElementById(id);
+
+let aulos = null, car = null;
+
+$("start").onclick = async () => {
+    $("start").disabled = true;
+    const ctx = new AudioContext({ sampleRate: 48000, latencyHint: "interactive" });
+    await ctx.resume();
+    aulos = await Aulos.create(ctx, {
+        bank: "../../../examples/hello_bank.json",
+        assets: ASSETS,
+        assetRoot: "../../../assets/",
+        maxVoices: 64,
+    });
+    aulos.node.connect(ctx.destination);
+    aulos.setListener(0, 0, 0);
+    for (const id of ["engine", "beep", "stopall", "rpm", "posx"]) $(id).disabled = false;
+    $("start").textContent = "running @ " + ctx.sampleRate + " Hz";
+    setInterval(() => {
+        const s = aulos.stats;
+        $("pl").style.width = Math.min(100, s.peakLeft * 100) + "%";
+        $("pr").style.width = Math.min(100, s.peakRight * 100) + "%";
+        $("voices").textContent = `${s.active} active, ${s.started} started, ${s.stolen} stolen, ${s.dropped} dropped`;
+    }, 100);
+};
+
+$("engine").onclick = () => { car = aulos.play3d("vehicle_engine", +$("posx").value, 0, -4); };
+$("beep").onclick   = () => aulos.play("beep");
+$("stopall").onclick = () => { aulos.stopAll(0.2); car = null; };
+
+$("rpm").oninput = (e) => {
+    $("rpmv").textContent = e.target.value;
+    if (car) aulos.setParameter(car, "rpm", +e.target.value);
+};
+$("posx").oninput = (e) => {
+    $("posxv").textContent = e.target.value + " m";
+    if (car) aulos.setPosition(car, +e.target.value, 0, -4);
+};
+
+/* ---- offline self test -------------------------------------------------
+ * Renders the flat verification bank (nothing resamples, no automation) and
+ * prints the exact numbers the native binary produced for the same bank, so
+ * the browser result can be diffed against build/flat.wav. */
+$("selftest").onclick = async () => {
+    $("selftest").disabled = true;
+    log.textContent = "rendering...";
+    try {
+        const SR = 48000, SECS = 4;
+        const ctx = new OfflineAudioContext(2, SR * SECS, SR);
+        const a = await Aulos.create(ctx, {
+            bank: "../../../tools/flat_bank.json",
+            assets: ["engine_loop.wav"],
+            assetRoot: "../../../assets/",
+            maxVoices: 32,
+        });
+        a.node.connect(ctx.destination);
+        a.setListener(0, 0, 0);
+        a.play("vehicle_engine");
+        await new Promise(r => setTimeout(r, 50));   // let the play command land
+        const buf = await ctx.startRendering();
+
+        const L = buf.getChannelData(0), R = buf.getChannelData(1);
+        let start = 0;
+        while (start < L.length && Math.abs(L[start]) < 1e-6) start++;
+
+        const seg = Math.floor((L.length - start) / 8);
+        const rms = [];
+        for (let i = 0; i < 8; ++i) {
+            let s = 0;
+            for (let k = start + i * seg; k < start + (i + 1) * seg; ++k) s += L[k] * L[k];
+            rms.push(Math.sqrt(s / seg));
+        }
+        let peak = 0;
+        for (let i = start; i < L.length; ++i) peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
+
+        const head = [];
+        for (let i = 0; i < 8; ++i) head.push(L[start + i].toFixed(9));
+
+        log.innerHTML =
+            `<span class="ok">rendered ${buf.length} frames @ ${buf.sampleRate} Hz in an AudioWorklet</span>\n` +
+            `silence before first sample : ${start} frames\n` +
+            `peak                        : ${peak.toFixed(9)}\n` +
+            `rms per 0.5 s (L)           : ${rms.map(v => v.toFixed(9)).join("  ")}\n` +
+            `first 8 samples (L)         : ${head.join("  ")}\n` +
+            `stats                       : started=${a.stats.started} dropped=${a.stats.dropped} cmd_dropped=${a.stats.commandsDropped}`;
+    } catch (e) {
+        log.innerHTML = `<span class="bad">${e.stack || e}</span>`;
+    }
+    $("selftest").disabled = false;
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "aulos-audio",
+  "version": "0.1.0",
+  "description": "Game audio middleware runtime (buses, 3D, doppler, voice stealing, JSON banks) compiled to WebAssembly and rendered in an AudioWorklet. No SharedArrayBuffer, no cross-origin isolation.",
+  "type": "module",
+  "main": "./aulos.js",
+  "module": "./aulos.js",
+  "exports": {
+    ".": "./aulos.js",
+    "./worklet": "./aulos-worklet.js",
+    "./wasm": "./aulos-wasm.mjs"
+  },
+  "files": [
+    "aulos.js",
+    "aulos-worklet.js",
+    "aulos-wasm.mjs",
+    "aulos_web.c",
+    "build_wasm.sh",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": ["audio", "game-audio", "middleware", "webaudio", "audioworklet", "wasm", "3d-audio", "doppler"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Flei-123/aulos.git", "directory": "bindings/web" },
+  "homepage": "https://github.com/Flei-123/aulos#readme",
+  "engines": { "node": ">=18" }
+}
