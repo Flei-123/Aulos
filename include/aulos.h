@@ -110,6 +110,15 @@ AUL_API void aul_set_listener(aul_system *sys, aul_vec3 position, aul_vec3 forwa
 AUL_API aul_instance aul_play(aul_system *sys, const char *event_name);
 AUL_API aul_instance aul_play_3d(aul_system *sys, const char *event_name, aul_vec3 position);
 
+/* Same as aul_play / aul_play_3d, but the voice is routed to bus_name instead
+ * of the bus the event declares in the bank. An unknown bus name is not an
+ * error: the voice falls back to the event's own bus. This is how a host
+ * engine implements "this one shot is UI, everything else is SFX" without
+ * duplicating the event in the bank. */
+AUL_API aul_instance aul_play_on_bus(aul_system *sys, const char *event_name, const char *bus_name);
+AUL_API aul_instance aul_play_3d_on_bus(aul_system *sys, const char *event_name,
+                                        aul_vec3 position, const char *bus_name);
+
 AUL_API void aul_stop(aul_system *sys, aul_instance inst, float fade_seconds);
 AUL_API void aul_stop_all(aul_system *sys, float fade_seconds);
 AUL_API int  aul_is_playing(aul_system *sys, aul_instance inst);
@@ -126,6 +135,20 @@ AUL_API void aul_set_parameter(aul_system *sys, aul_instance inst, const char *n
 
 AUL_API void  aul_set_bus_volume(aul_system *sys, const char *bus_name, float volume);
 AUL_API float aul_get_bus_volume(aul_system *sys, const char *bus_name);
+
+/* Mute is a separate flag, not volume 0: the fader position survives it.
+ * aul_get_bus_volume keeps reporting the set volume while muted. */
+AUL_API void aul_set_bus_mute(aul_system *sys, const char *bus_name, int muted);
+AUL_API int  aul_get_bus_mute(aul_system *sys, const char *bus_name);
+
+/* Creates the bus if the bank did not declare it (idempotent). parent_name
+ * may be NULL (no parent -> straight to the output) and is only applied when
+ * the bus is newly created. Returns 1 when the bus exists afterwards. */
+AUL_API int aul_ensure_bus(aul_system *sys, const char *bus_name, const char *parent_name);
+
+/* What the mixer actually applies right now: 0 while muted, else the
+ * (smoothed) volume. Useful for meters and tests. */
+AUL_API float aul_bus_effective_volume(aul_system *sys, const char *bus_name);
 
 /* ---- introspection ----------------------------------------------------- */
 

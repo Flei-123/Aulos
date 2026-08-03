@@ -112,7 +112,8 @@ struct Bus {
     std::string name;
     int   parent = -1;
     float volume = 1.0f;
-    std::atomic<float> targetVolume{1.0f};
+    std::atomic<float>   targetVolume{1.0f};
+    std::atomic<uint8_t> muted{0};  /* separate from the fader, see aul_set_bus_mute */
     float currentVolume = 1.0f;
     std::vector<float> buffer;      /* audio thread scratch, stereo interleaved */
 };
@@ -178,6 +179,7 @@ struct Command {
     uint32_t generation = 0;
     int32_t  a = 0;          /* eventId / param index                       */
     int32_t  b = 0;          /* sampleId                                    */
+    int32_t  busOverride = -1; /* CMD_START: >= 0 routes the voice to this bus */
     float    f0 = 0, f1 = 0; /* volume / pitch / fade / param value         */
     float    px = 0, py = 0, pz = 0;
     float    vx = 0, vy = 0, vz = 0;
@@ -471,7 +473,8 @@ static void aulProcessCommands(aul_system *sys) {
             v.velocity   = Vec3{cmd.vx, cmd.vy, cmd.vz};
 
             const EventDef &def = sys->events[(size_t)cmd.a];
-            v.bus     = def.bus;
+            v.bus     = (cmd.busOverride >= 0 && (size_t)cmd.busOverride < sys->buses.size())
+                        ? cmd.busOverride : def.bus;
             v.loop    = def.loop;
             v.spatial = def.spatial;
             for (size_t p = 0; p < def.params.size() && p < kMaxParams; ++p)
@@ -705,7 +708,8 @@ static void aulRenderBlock(aul_system *sys, float *out, uint32_t frames) {
     /* fold buses into their parents, deepest first */
     for (int busId : sys->busOrder) {
         Bus &bus = *sys->buses[(size_t)busId];
-        float target = bus.targetVolume.load(std::memory_order_relaxed);
+        float target = bus.muted.load(std::memory_order_relaxed)
+                       ? 0.0f : bus.targetVolume.load(std::memory_order_relaxed);
         float gain = bus.currentVolume;
         float step = (target - gain) / (float)frames;
         float *src = bus.buffer.data();
@@ -1113,13 +1117,21 @@ void enforceInstanceLimit(aul_system *sys, int eventId, int limit) {
     }
 }
 
-aul_instance startEvent(aul_system *sys, const char *eventName, bool spatial, aul_vec3 position) {
+aul_instance startEvent(aul_system *sys, const char *eventName, bool spatial,
+                        aul_vec3 position, const char *busName) {
     if (!sys || !eventName) return AUL_INVALID_INSTANCE;
     auto it = sys->eventIndex.find(eventName);
     if (it == sys->eventIndex.end()) return AUL_INVALID_INSTANCE;
 
     int eventId = it->second;
     const EventDef &def = sys->events[(size_t)eventId];
+
+    int busOverride = -1;
+    if (busName && busName[0]) {
+        auto b = sys->busIndex.find(busName);
+        if (b != sys->busIndex.end()) busOverride = b->second;
+        /* unknown name: documented fallback is the event's own bus */
+    }
 
     std::lock_guard<std::mutex> lock(sys->allocMutex);
 
@@ -1154,6 +1166,7 @@ aul_instance startEvent(aul_system *sys, const char *eventName, bool spatial, au
     cmd.generation = generation;
     cmd.a = eventId;
     cmd.b = sampleId;
+    cmd.busOverride = busOverride;
     cmd.f0 = volume;
     cmd.f1 = pitch;
     if (spatial || def.spatial) {
@@ -1177,11 +1190,21 @@ aul_instance startEvent(aul_system *sys, const char *eventName, bool spatial, au
 
 extern "C" aul_instance aul_play(aul_system *sys, const char *eventName) {
     aul_vec3 zero = {0, 0, 0};
-    return startEvent(sys, eventName, false, zero);
+    return startEvent(sys, eventName, false, zero, nullptr);
 }
 
 extern "C" aul_instance aul_play_3d(aul_system *sys, const char *eventName, aul_vec3 position) {
-    return startEvent(sys, eventName, true, position);
+    return startEvent(sys, eventName, true, position, nullptr);
+}
+
+extern "C" aul_instance aul_play_on_bus(aul_system *sys, const char *eventName, const char *busName) {
+    aul_vec3 zero = {0, 0, 0};
+    return startEvent(sys, eventName, false, zero, busName);
+}
+
+extern "C" aul_instance aul_play_3d_on_bus(aul_system *sys, const char *eventName,
+                                           aul_vec3 position, const char *busName) {
+    return startEvent(sys, eventName, true, position, busName);
 }
 
 extern "C" void aul_stop(aul_system *sys, aul_instance inst, float fadeSeconds) {
@@ -1279,6 +1302,39 @@ extern "C" float aul_get_bus_volume(aul_system *sys, const char *busName) {
     auto it = sys->busIndex.find(busName);
     if (it == sys->busIndex.end()) return 0.0f;
     return sys->buses[(size_t)it->second]->targetVolume.load(std::memory_order_relaxed);
+}
+
+extern "C" void aul_set_bus_mute(aul_system *sys, const char *busName, int muted) {
+    if (!sys || !busName) return;
+    auto it = sys->busIndex.find(busName);
+    if (it == sys->busIndex.end()) return;
+    sys->buses[(size_t)it->second]->muted.store(muted ? 1 : 0, std::memory_order_relaxed);
+}
+
+extern "C" int aul_get_bus_mute(aul_system *sys, const char *busName) {
+    if (!sys || !busName) return 0;
+    auto it = sys->busIndex.find(busName);
+    if (it == sys->busIndex.end()) return 0;
+    return sys->buses[(size_t)it->second]->muted.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+extern "C" int aul_ensure_bus(aul_system *sys, const char *busName, const char *parentName) {
+    if (!sys || !busName || !busName[0]) return 0;
+    int id = findOrCreateBus(sys, busName);
+    if (parentName && parentName[0] && sys->buses[(size_t)id]->parent < 0
+        && std::strcmp(parentName, busName) != 0)
+        sys->buses[(size_t)id]->parent = findOrCreateBus(sys, parentName);
+    rebuildBusOrder(sys);
+    return 1;
+}
+
+extern "C" float aul_bus_effective_volume(aul_system *sys, const char *busName) {
+    if (!sys || !busName) return 0.0f;
+    auto it = sys->busIndex.find(busName);
+    if (it == sys->busIndex.end()) return 0.0f;
+    Bus &bus = *sys->buses[(size_t)it->second];
+    if (bus.muted.load(std::memory_order_relaxed)) return 0.0f;
+    return bus.currentVolume;
 }
 
 extern "C" void aul_get_stats(aul_system *sys, aul_stats *out) {
