@@ -25,7 +25,7 @@ year: no bus hierarchy, no random variation, no priority based voice stealing,
 no data driven parameter curves, no "the sound designer changes it without a
 programmer". Middleware exists exactly to close that gap - and the free options
 are either dead, GPL, or an SDK you cannot ship in a hobby project without
-reading a lawyer's opinion first. Aulos is MIT, one static library, ~1.3k lines.
+reading a lawyer's opinion first. Aulos is MPL-2.0, one static library, ~1.3k lines.
 
 ## Build
 
