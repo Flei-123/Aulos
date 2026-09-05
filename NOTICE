@@ -1,0 +1,17 @@
+Aulos
+Copyright (C) 2026 Justin (Fleitec)
+
+This source code is subject to the terms of the Mozilla Public License,
+version 2.0. If a copy of the MPL was not distributed with this file, you
+can obtain one at https://mozilla.org/MPL/2.0/.
+
+  SPDX-License-Identifier: MPL-2.0
+
+WHAT THIS MEANS IN PLAIN WORDS
+------------------------------
+  * If you CHANGE a file of Aulos and pass it on, you must publish that
+    changed file. The fork stays open.
+  * If you only USE Aulos in your own program, your program is yours.
+    It may be closed, and it may be sold. Nothing rubs off on it.
+
+The full licence text is in the file LICENSE in this directory.
